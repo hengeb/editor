@@ -152,7 +152,7 @@ export class TabManager {
         }
     }
 
-    close(path) {
+    close(path = this.activePath) {
         const tab = this.tabs.get(path);
         if (!tab) {
             return;

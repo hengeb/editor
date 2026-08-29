@@ -2,7 +2,8 @@ import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
+import { linter, lintGutter } from '@codemirror/lint';
 import { tags as t } from '@lezer/highlight';
 import { yaml } from '@codemirror/lang-yaml';
 import { markdown } from '@codemirror/lang-markdown';
@@ -67,6 +68,29 @@ const highlightStyle = HighlightStyle.define([
     { tag: t.attributeName, color: '#79c0ff' },
 ]);
 
+// Generischer Linter: alle verwendeten Sprachpakete (yaml, json, javascript,
+// css, html, php, xml) basieren auf Lezer-Grammatiken, die bei ungültiger
+// Syntax Fehlerknoten in den Baum einfügen - die werden hier als Diagnostics
+// markiert, ohne dass es einen eigenen Linter je Sprache bräuchte.
+const syntaxErrorLinter = linter((view) => {
+    const diagnostics = [];
+
+    syntaxTree(view.state).iterate({
+        enter: (node) => {
+            if (node.type.isError) {
+                diagnostics.push({
+                    from: node.from,
+                    to: Math.max(node.to, node.from + 1),
+                    severity: 'error',
+                    message: 'Syntaxfehler',
+                });
+            }
+        },
+    });
+
+    return diagnostics;
+});
+
 function languageForExtension(ext) {
     switch ((ext ?? '').toLowerCase()) {
         case 'yml':
@@ -94,6 +118,7 @@ function languageForExtension(ext) {
         case 'html':
         case 'htm':
         case 'vue':
+        case 'latte':
             return html();
         case 'xml':
         case 'svg':
@@ -114,6 +139,8 @@ export function createEditor({ parent, doc, ext, onChange }) {
         basicSetup,
         theme,
         syntaxHighlighting(highlightStyle),
+        syntaxErrorLinter,
+        lintGutter(),
         keymap.of([indentWithTab]),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {

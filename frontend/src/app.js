@@ -62,9 +62,16 @@ document.addEventListener('DOMContentLoaded', () => {
     newFolderBtn.addEventListener('click', () => tree.createEntry('dir'));
 
     document.addEventListener('keydown', (event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        const ctrlOrCmd = event.ctrlKey || event.metaKey;
+        const key = event.key.toLowerCase();
+
+        if (ctrlOrCmd && key === 's') {
             event.preventDefault();
             tabs.save();
+        } else if (ctrlOrCmd && event.altKey && key === 'w') {
+            // Strg+W selbst kann kein Browser abfangen (reserviert für "Tab schließen")
+            event.preventDefault();
+            tabs.close();
         }
     });
 });

@@ -62,6 +62,7 @@ const extensionIcons = {
     ts: iconFileTypeTs,
     tsx: iconFileTypeTsx,
     vue: iconFileTypeVue,
+    latte: iconFileTypeHtml,
     html: iconFileTypeHtml,
     htm: iconFileTypeHtml,
     css: iconFileTypeCss,
