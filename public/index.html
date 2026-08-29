@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Editor</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="topbar">
+            <button id="tree-toggle" class="icon-button" type="button" aria-label="Dateibaum umschalten"></button>
+            <h1 class="app-title">Editor</h1>
+            <button id="save-button" class="icon-button icon-button--accent" type="button" aria-label="Speichern"></button>
+        </header>
+        <div class="layout">
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-toolbar">
+                    <button id="new-file-btn" class="icon-button" type="button" title="Neue Datei"></button>
+                    <button id="new-folder-btn" class="icon-button" type="button" title="Neuer Ordner"></button>
+                </div>
+                <div id="tree-container" class="tree-container"></div>
+            </aside>
+            <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+            <main class="main">
+                <div id="tabs-bar" class="tabs-bar"></div>
+                <div id="editor-container" class="editor-container">
+                    <div class="empty-state">Wähle eine Datei aus dem Dateibaum.</div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="assets/js/bundle.js"></script>
+</body>
+</html>
