@@ -1,0 +1,9 @@
+/vendor/
+/node_modules/
+/frontend/node_modules/
+/frontend/dist/
+/public/assets/js/bundle.js
+/public/assets/js/bundle.js.map
+/data/
+/.env
+/.phpunit.cache/
