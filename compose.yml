@@ -1,0 +1,29 @@
+services:
+  editor:
+    image: ${EDITOR_IMAGE:-ghcr.io/hengeb/editor}:${EDITOR_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ${HOST_DATA_DIR:-./data}:/files
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      AUTH_USER_HEADER: ${AUTH_USER_HEADER:-Remote-User}
+      AUTH_GROUPS_HEADER: ${AUTH_GROUPS_HEADER:-Remote-Groups}
+      AUTH_ALLOWED_GROUP: ${AUTH_ALLOWED_GROUP:-}
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.editor.rule: Host(`${EDITOR_HOST}`)
+      traefik.http.routers.editor.entrypoints: web
+      traefik.http.routers.editor.middlewares: forwardauth@file
+      traefik.http.services.editor.loadbalancer.server.port: "80"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
