@@ -4,6 +4,7 @@ import { showContextMenu } from './context-menu.js';
 
 const LONG_PRESS_MS = 450;
 const MOVE_THRESHOLD_PX = 8;
+const HOVER_EXPAND_MS = 700;
 
 function dirOf(path) {
     const idx = path.lastIndexOf('/');
@@ -250,6 +251,9 @@ export class FileTree {
         if (node.expanded && node.children === null) {
             const { entries } = await api.tree(node.path, 2);
             node.children = this.toNodes(entries, node);
+        }
+
+        if (node.expanded && node.childrenEl.childElementCount === 0 && node.children) {
             this.renderChildren(node, node.childrenEl);
         }
     }
@@ -390,7 +394,14 @@ export class FileTree {
 
         document.body.appendChild(ghost);
 
-        this.dragState = { node, ghostEl: ghost, highlightEl: null, targetNode: null };
+        this.dragState = {
+            node,
+            ghostEl: ghost,
+            highlightEl: null,
+            targetNode: null,
+            hoverDir: null,
+            hoverTimer: null,
+        };
         node.el.classList.add('tree-item--dragging');
         this.positionGhost(x, y);
     }
@@ -456,6 +467,20 @@ export class FileTree {
         }
 
         this.dragState.targetNode = valid ? targetNode : null;
+
+        // Beim Verweilen über einem eingeklappten Verzeichnis dieses aufklappen
+        const hoverDir = targetNode && targetNode !== this.root && targetNode.type === 'dir' ? targetNode : null;
+        if (hoverDir !== this.dragState.hoverDir) {
+            clearTimeout(this.dragState.hoverTimer);
+            this.dragState.hoverDir = hoverDir;
+            this.dragState.hoverTimer = hoverDir && !hoverDir.expanded
+                ? setTimeout(() => {
+                    if (this.dragState && this.dragState.hoverDir === hoverDir && !hoverDir.expanded) {
+                        this.toggle(hoverDir);
+                    }
+                }, HOVER_EXPAND_MS)
+                : null;
+        }
     }
 
     endDrag() {
@@ -463,7 +488,8 @@ export class FileTree {
             return;
         }
 
-        const { node, targetNode, ghostEl, highlightEl } = this.dragState;
+        const { node, targetNode, ghostEl, highlightEl, hoverTimer } = this.dragState;
+        clearTimeout(hoverTimer);
         ghostEl.remove();
         highlightEl?.classList.remove('drop-target');
         node.el.classList.remove('tree-item--dragging');
@@ -478,6 +504,7 @@ export class FileTree {
         if (!this.dragState) {
             return;
         }
+        clearTimeout(this.dragState.hoverTimer);
         this.dragState.ghostEl.remove();
         this.dragState.highlightEl?.classList.remove('drop-target');
         this.dragState.node.el.classList.remove('tree-item--dragging');
