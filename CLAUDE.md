@@ -19,7 +19,10 @@ zum Verschieben ist implementiert, aber nicht automatisiert getestet (siehe
 ## Architektur
 
 ```
-compose.yml, .env.example, Dockerfile, Makefile   – Deployment
+deploy/                                            – alles zum Betreiben (siehe unten); für ein reines Deployment
+                                                      genügt dieses Verzeichnis, der Rest liegt nur auf GitHub
+  compose.yml, .env.example, Makefile
+Dockerfile                                          – Build (Kontext = Repo-Root, referenziert von deploy/compose.yml)
 docker/                                            – nginx.conf, supervisord.conf, php.ini, entrypoint.sh
 src/                                                – PHP-Backend (PSR-4 App\)
   Config.php                                        – ENV-Konfiguration
@@ -41,7 +44,7 @@ tests/Unit/                                         – PHPUnit (PathResolver, F
 
 - Wurzelverzeichnis ist **fest** `/files` im Container (kein ENV). Welcher
   Host-Pfad dort landet, wird ausschließlich über den Docker-Volume-Mount in
-  `compose.yml`/`.env` (`HOST_DATA_DIR`) bestimmt.
+  `deploy/compose.yml`/`.env` (`HOST_DATA_DIR`) bestimmt.
 - `PathResolver` verhindert Path-Traversal und Symlink-Escapes (jeder Pfad
   wird via `realpath()` gegen die Wurzel geprüft).
 - `ForwardAuth` liest die von Traefiks `forwardauth@file`-Middleware
@@ -56,13 +59,13 @@ tests/Unit/                                         – PHPUnit (PathResolver, F
 - `PUT /api/file` unterstützt optimistische Konflikterkennung über `mtime`
   (409 falls die Datei serverseitig zwischenzeitlich geändert wurde).
 
-#### ENV-Variablen (siehe `.env.example`)
+#### ENV-Variablen (siehe `deploy/.env.example`)
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `EDITOR_HOST` | – (erforderlich) | Domain für die Traefik-Route |
-| `HOST_DATA_DIR` | `./data` | Host-Verzeichnis, gemountet nach `/files` |
-| `PUID` / `PGID` | `1000` / `1000` | UID/GID, unter der der Container-Prozess auf `/files` zugreift (muss zu `HOST_DATA_DIR`-Besitzrechten passen) |
+| `EDITOR_HOST` | `editor.docker.localhost` | Domain für die Traefik-Route |
+| `HOST_DATA_DIR` | `./data` (relativ zu `deploy/`) | Host-Verzeichnis, gemountet nach `/files` |
+| `USER` | aktueller Nutzer von `make up` | Systembenutzer, dessen UID/GID der Container verwendet; `make up` löst den Namen per `id -u`/`id -g` **auf dem Docker-Host** in `PUID`/`PGID` auf und reicht diese als Prozessumgebung an `docker compose` durch (muss zu `HOST_DATA_DIR`-Besitzrechten passen). `compose.yml` selbst hat zusätzlich einen Fallback `PUID`/`PGID` = `1000`, falls `docker compose` direkt ohne `make` aufgerufen wird. |
 | `TRAEFIK_NETWORK` | `traefik` | Name des externen Docker-Netzwerks |
 | `AUTH_ALLOWED_GROUP` | leer (= jeder authentifizierte User) | Nur Mitglieder dieser Remote-Group dürfen zugreifen |
 | `AUTH_USER_HEADER` | `Remote-User` | Header-Name für den authentifizierten User |
@@ -113,7 +116,9 @@ Fehler einheitlich als `{"error": "..."}` mit passendem HTTP-Status.
 - `docker/entrypoint.sh` remapped `www-data` beim Containerstart auf
   `PUID`/`PGID` (via `usermod`/`groupmod`, Paket `shadow`), damit im Container
   angelegte Dateien auf dem Host dem erwartenden Nutzer gehören, ohne das
-  Host-Verzeichnis manuell chmod/chown-en zu müssen.
+  Host-Verzeichnis manuell chmod/chown-en zu müssen. Die eigentliche
+  UID/GID-Auflösung von `USER=name` passiert im `up`-Target von
+  `deploy/Makefile`, nicht in Docker selbst.
 - Container-Logs sind bewusst leise: nginx schreibt sein Access-Log nach
   `/dev/stdout`, aber nur für Responses mit Status ≥ 500 (`map $status
   $log_server_errors_only` in `docker/nginx.conf`; ohne diese Überschreibung
@@ -129,25 +134,21 @@ Fehler einheitlich als `{"error": "..."}` mit passendem HTTP-Status.
 - CI (`.github/workflows/ci.yml`): PHPUnit-Tests laufen bei jedem Push/PR;
   bei Push auf `main` wird zusätzlich das Image gebaut und nach
   `ghcr.io/hengeb/editor` (Tags `latest` und Commit-SHA) gepusht.
-- `compose.yml` referenziert dieses GHCR-Image als Standard; `make build`
-  baut stattdessen lokal (unter demselben Image-Tag), sodass ein
-  anschließendes `make up` das lokal gebaute Image verwendet, statt zu pullen.
+- `deploy/compose.yml` referenziert dieses GHCR-Image als Standard; `make
+  build` baut stattdessen lokal aus dem Repo-Root (`context: ..`, unter
+  demselben Image-Tag), sodass ein anschließendes `make up` das lokal gebaute
+  Image verwendet, statt zu pullen. `make build` setzt daher einen vollen
+  Repo-Checkout voraus; ein reines Deployment mit nur dem `deploy/`-Ordner
+  nutzt ausschließlich das GHCR-Image.
 
-## Makefile-Targets
+## Makefile-Targets (in `deploy/`)
 
 `setup`, `up`, `down`, `logs`, `shell`, `test`, `build`, `help` – siehe
-`make help` für Kurzbeschreibungen.
+`make help` für Kurzbeschreibungen. Alle Befehle werden aus `deploy/` heraus
+ausgeführt (`cd deploy && make up`).
 
 ## Offene Punkte / für die nächste Session
 
 - Drag & Drop (Maus + Touch-Long-Press) ist implementiert, aber nur manuell
   überflogen, nicht automatisiert getestet (Playwright kann Touch-Pointer-
   Events simulieren, wurde hier aus Zeitgründen nicht ergänzt).
-- Rückfrage an den User offen: Für "als welcher User im Dateisystem der
-  Editor läuft" wurden `PUID`/`PGID` (numerisch, Konvention à la
-  linuxserver.io) statt eines einzelnen `USER=henrik`-Namens gewählt, da eine
-  Username-zu-UID-Auflösung zur Laufzeit fragil wäre (der Name müsste auch im
-  Container existieren). Falls eine andere Variablenbenennung gewünscht ist,
-  einfach Bescheid geben.
-- `EDITOR_HOST` in `.env` muss vor dem ersten produktiven `make up` gesetzt
-  werden (kein sinnvoller Default möglich).

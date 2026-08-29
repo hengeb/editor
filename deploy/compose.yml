@@ -2,7 +2,7 @@ services:
   editor:
     image: ${EDITOR_IMAGE:-ghcr.io/hengeb/editor}:${EDITOR_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
@@ -18,7 +18,7 @@ services:
       - traefik
     labels:
       traefik.enable: "true"
-      traefik.http.routers.editor.rule: Host(`${EDITOR_HOST}`)
+      traefik.http.routers.editor.rule: Host(`${EDITOR_HOST:-editor.docker.localhost}`)
       traefik.http.routers.editor.entrypoints: web
       traefik.http.routers.editor.middlewares: forwardauth@file
       traefik.http.services.editor.loadbalancer.server.port: "80"

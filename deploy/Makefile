@@ -6,7 +6,9 @@ setup: ## .env aus .env.example anlegen (falls noch nicht vorhanden)
 	@test -f .env || cp .env.example .env
 
 up: ## Container starten (nutzt ggf. lokal gebautes Image, sonst GHCR)
-	docker compose up -d
+	@name="$$( [ -f .env ] && grep -E '^USER=' .env | cut -d= -f2- )"; \
+	name="$${name:-$$(id -un)}"; \
+	PUID="$$(id -u "$$name")" PGID="$$(id -g "$$name")" docker compose up -d
 
 down: ## Container stoppen und entfernen
 	docker compose down
