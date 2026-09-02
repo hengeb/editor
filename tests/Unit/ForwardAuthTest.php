@@ -11,34 +11,13 @@ use PHPUnit\Framework\TestCase;
 
 final class ForwardAuthTest extends TestCase
 {
-    public function testThrows401WithoutUserHeader(): void
+    public function testAllowsAccessWithoutAnyHeadersWhenNoGroupRestriction(): void
     {
         $auth = new ForwardAuth(new Config());
 
-        try {
-            $auth->authenticate([]);
-            self::fail('Erwartete AuthException wurde nicht geworfen');
-        } catch (AuthException $e) {
-            self::assertSame(401, $e->statusCode());
-        }
-    }
+        $auth->authenticate([]);
 
-    public function testAllowsAuthenticatedUserWithoutGroupRestriction(): void
-    {
-        $auth = new ForwardAuth(new Config());
-
-        $user = $auth->authenticate(['Remote-User' => 'alice']);
-
-        self::assertSame('alice', $user);
-    }
-
-    public function testHeaderLookupIsCaseInsensitive(): void
-    {
-        $auth = new ForwardAuth(new Config());
-
-        $user = $auth->authenticate(['remote-user' => 'alice']);
-
-        self::assertSame('alice', $user);
+        $this->expectNotToPerformAssertions();
     }
 
     public function testThrows403WhenGroupNotAllowed(): void
@@ -46,7 +25,19 @@ final class ForwardAuthTest extends TestCase
         $auth = new ForwardAuth(new Config(authAllowedGroup: 'admins'));
 
         try {
-            $auth->authenticate(['Remote-User' => 'alice', 'Remote-Groups' => 'users,editors']);
+            $auth->authenticate(['Remote-Groups' => 'users,editors']);
+            self::fail('Erwartete AuthException wurde nicht geworfen');
+        } catch (AuthException $e) {
+            self::assertSame(403, $e->statusCode());
+        }
+    }
+
+    public function testThrows403WhenGroupsHeaderMissingButGroupRequired(): void
+    {
+        $auth = new ForwardAuth(new Config(authAllowedGroup: 'admins'));
+
+        try {
+            $auth->authenticate([]);
             self::fail('Erwartete AuthException wurde nicht geworfen');
         } catch (AuthException $e) {
             self::assertSame(403, $e->statusCode());
@@ -57,8 +48,17 @@ final class ForwardAuthTest extends TestCase
     {
         $auth = new ForwardAuth(new Config(authAllowedGroup: 'admins'));
 
-        $user = $auth->authenticate(['Remote-User' => 'alice', 'Remote-Groups' => 'users, admins, editors']);
+        $auth->authenticate(['Remote-Groups' => 'users, admins, editors']);
 
-        self::assertSame('alice', $user);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testGroupsHeaderLookupIsCaseInsensitive(): void
+    {
+        $auth = new ForwardAuth(new Config(authAllowedGroup: 'admins'));
+
+        $auth->authenticate(['remote-groups' => 'admins']);
+
+        $this->expectNotToPerformAssertions();
     }
 }

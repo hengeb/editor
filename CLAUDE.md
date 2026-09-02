@@ -47,9 +47,11 @@ tests/Unit/                                         – PHPUnit (PathResolver, F
   `deploy/compose.yml`/`.env` (`HOST_DATA_DIR`) bestimmt.
 - `PathResolver` verhindert Path-Traversal und Symlink-Escapes (jeder Pfad
   wird via `realpath()` gegen die Wurzel geprüft).
-- `ForwardAuth` liest die von Traefiks `forwardauth@file`-Middleware
-  gesetzten Header (Name konfigurierbar) und autorisiert optional gegen eine
-  konfigurierbare Remote-Group.
+- Authentifizierung selbst übernimmt ausschließlich Traefiks
+  `forwardauth@file`-Middleware; die App prüft keinen User-Header. `ForwardAuth`
+  liest optional nur den (konfigurierbaren) Gruppen-Header und verweigert den
+  Zugriff (403), falls `AUTH_ALLOWED_GROUP` gesetzt ist und der Nutzer nicht
+  Mitglied dieser Gruppe ist.
 - Alle mutierenden Requests (POST/PUT/PATCH/DELETE) verlangen den Header
   `X-Requested-With: XMLHttpRequest` als CSRF-Schutz (Forward-Auth setzt i. d. R.
   ein Session-Cookie; ohne diesen Check könnte eine fremde Seite darüber
@@ -67,8 +69,7 @@ tests/Unit/                                         – PHPUnit (PathResolver, F
 | `HOST_DATA_DIR` | `./data` (relativ zu `deploy/`) | Host-Verzeichnis, gemountet nach `/files` |
 | `USER` | aktueller Nutzer von `make up` | Systembenutzer, dessen UID/GID der Container verwendet; `make up` löst den Namen per `id -u`/`id -g` **auf dem Docker-Host** in `PUID`/`PGID` auf und reicht diese als Prozessumgebung an `docker compose` durch (muss zu `HOST_DATA_DIR`-Besitzrechten passen). `compose.yml` selbst hat zusätzlich einen Fallback `PUID`/`PGID` = `1000`, falls `docker compose` direkt ohne `make` aufgerufen wird. |
 | `TRAEFIK_NETWORK` | `traefik` | Name des externen Docker-Netzwerks |
-| `AUTH_ALLOWED_GROUP` | leer (= jeder authentifizierte User) | Nur Mitglieder dieser Remote-Group dürfen zugreifen |
-| `AUTH_USER_HEADER` | `Remote-User` | Header-Name für den authentifizierten User |
+| `AUTH_ALLOWED_GROUP` | leer (= keine Gruppenprüfung) | Nur Mitglieder dieser Remote-Group dürfen zugreifen |
 | `AUTH_GROUPS_HEADER` | `Remote-Groups` | Header-Name für die (kommagetrennten) Gruppen |
 | `EDITOR_IMAGE` / `EDITOR_TAG` | `ghcr.io/hengeb/editor` / `latest` | Welches Image `docker compose` zieht (überschrieben durch `make build`) |
 

@@ -13,28 +13,26 @@ final class ForwardAuth
     }
 
     /**
+     * Authentifizierung selbst übernimmt die Traefik-forwardauth-Middleware;
+     * hier wird nur optional geprüft, ob der Nutzer einer erlaubten Gruppe
+     * angehört (falls AUTH_ALLOWED_GROUP konfiguriert ist).
+     *
      * @param array<string, string> $headers Header-Name => Wert (case-insensitive Lookup wird intern erledigt)
      *
-     * @throws AuthException falls der Zugriff verweigert werden muss
+     * @throws AuthException falls die Gruppenprüfung fehlschlägt
      */
-    public function authenticate(array $headers): string
+    public function authenticate(array $headers): void
     {
-        $user = $this->header($headers, $this->config->authUserHeader);
-
-        if ($user === null || $user === '') {
-            throw new AuthException('Nicht authentifiziert', 401);
+        if ($this->config->authAllowedGroup === '') {
+            return;
         }
 
-        if ($this->config->authAllowedGroup !== '') {
-            $groupsHeader = $this->header($headers, $this->config->authGroupsHeader) ?? '';
-            $groups = array_map('trim', explode(',', $groupsHeader));
+        $groupsHeader = $this->header($headers, $this->config->authGroupsHeader) ?? '';
+        $groups = array_map('trim', explode(',', $groupsHeader));
 
-            if (!in_array($this->config->authAllowedGroup, $groups, true)) {
-                throw new AuthException('Kein Zugriff für diese Gruppe', 403);
-            }
+        if (!in_array($this->config->authAllowedGroup, $groups, true)) {
+            throw new AuthException('Kein Zugriff für diese Gruppe', 403);
         }
-
-        return $user;
     }
 
     /**
