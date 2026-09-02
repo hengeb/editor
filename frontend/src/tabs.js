@@ -2,6 +2,8 @@ import { api, ApiError } from './api.js';
 import { createEditor } from './editor.js';
 import { ui, iconForFile } from './icons.js';
 
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico']);
+
 export class TabManager {
     constructor(tabsBarEl, editorContainerEl, { onActiveChange } = {}) {
         this.tabsBarEl = tabsBarEl;
@@ -89,10 +91,7 @@ export class TabManager {
         pane.hidden = true;
 
         if (tab.binary) {
-            const notice = document.createElement('div');
-            notice.className = 'editor-notice';
-            notice.innerHTML = `${ui.warning}<p>Diese Datei kann nicht bearbeitet werden (kein Textformat).</p>`;
-            pane.appendChild(notice);
+            pane.appendChild(this.buildBinaryPreview(tab));
             return pane;
         }
 
@@ -105,6 +104,40 @@ export class TabManager {
         });
 
         return pane;
+    }
+
+    buildBinaryPreview(tab) {
+        const ext = (tab.ext ?? '').toLowerCase();
+        const rawUrl = api.rawUrl(tab.path);
+
+        if (IMAGE_EXTENSIONS.has(ext)) {
+            const img = document.createElement('img');
+            img.className = 'preview-image';
+            img.src = rawUrl;
+            img.alt = tab.name;
+            return img;
+        }
+
+        if (ext === 'pdf') {
+            const embed = document.createElement('embed');
+            embed.className = 'preview-pdf';
+            embed.src = rawUrl;
+            embed.type = 'application/pdf';
+            return embed;
+        }
+
+        const notice = document.createElement('div');
+        notice.className = 'editor-notice';
+        notice.innerHTML = `${ui.warning}<p>Für diese Datei gibt es keine Vorschau.</p>`;
+
+        const link = document.createElement('a');
+        link.className = 'download-button';
+        link.href = rawUrl;
+        link.download = tab.name;
+        link.textContent = 'Herunterladen';
+        notice.appendChild(link);
+
+        return notice;
     }
 
     activate(path) {

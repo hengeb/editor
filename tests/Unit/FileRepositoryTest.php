@@ -90,6 +90,45 @@ final class FileRepositoryTest extends TestCase
         self::assertArrayNotHasKey('content', $result);
     }
 
+    public function testReadRawReturnsContentAndMimeType(): void
+    {
+        // Minimales 1x1-PNG
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+        file_put_contents($this->root . '/image.png', $png);
+
+        [$content, $mimeType] = $this->files->readRaw('image.png');
+
+        self::assertSame($png, $content);
+        self::assertSame('image/png', $mimeType);
+    }
+
+    public function testUploadCreatesNewFile(): void
+    {
+        $mtime = $this->files->upload('uploaded.bin', "\x00\x01binary");
+
+        self::assertSame("\x00\x01binary", file_get_contents($this->root . '/uploaded.bin'));
+        self::assertIsInt($mtime);
+    }
+
+    public function testUploadOverwritesExistingFile(): void
+    {
+        file_put_contents($this->root . '/existing.txt', 'alt');
+
+        $this->files->upload('existing.txt', 'neu');
+
+        self::assertSame('neu', file_get_contents($this->root . '/existing.txt'));
+    }
+
+    public function testUploadThrowsIfParentMissing(): void
+    {
+        try {
+            $this->files->upload('missing-dir/file.txt', 'inhalt');
+            self::fail('Erwartete PathException wurde nicht geworfen');
+        } catch (PathException $e) {
+            self::assertSame(404, $e->statusCode());
+        }
+    }
+
     public function testCreateFileAndDir(): void
     {
         $this->files->create('new-file.txt', 'file');

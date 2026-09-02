@@ -7,6 +7,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Api\FileController;
 use App\Api\Router;
 use App\Api\TreeController;
+use App\Api\UploadController;
 use App\Auth\AuthException;
 use App\Auth\ForwardAuth;
 use App\Config;
@@ -53,7 +54,12 @@ $resource = preg_replace('#^/api/#', '', $path, 1) ?? $path;
 parse_str($_SERVER['QUERY_STRING'] ?? '', $query);
 
 $body = null;
-if (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+$rawBody = null;
+
+if (trim($resource, '/') === 'upload' && $method === 'PUT') {
+    $rawBody = file_get_contents('php://input');
+    $rawBody = $rawBody === false ? '' : $rawBody;
+} elseif (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
     $raw = file_get_contents('php://input');
     $decoded = $raw === '' || $raw === false ? [] : json_decode($raw, true);
 
@@ -67,11 +73,18 @@ if (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
 
 $paths = new PathResolver(Config::ROOT_DIR);
 $files = new FileRepository($paths);
-$router = new Router(new TreeController($files), new FileController($files));
+$router = new Router(new TreeController($files), new FileController($files), new UploadController($files));
 
 try {
-    $response = $router->dispatch($method, $resource, $query, $body);
-    respond($response->status, $response->data);
+    $response = $router->dispatch($method, $resource, $query, $body, $rawBody);
+
+    if ($response->rawBody !== null) {
+        http_response_code($response->status);
+        header('Content-Type: ' . $response->rawContentType);
+        echo $response->rawBody;
+    } else {
+        respond($response->status, $response->data);
+    }
 } catch (HttpStatusException $e) {
     respond($e->statusCode(), ['error' => $e->getMessage()]);
 } catch (\Throwable) {

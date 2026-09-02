@@ -25,6 +25,8 @@ export class FileTree {
         this.nodesByPath = new Map();
         this.selectedDir = '';
         this.dragState = null;
+        this.osDropState = { highlightEl: null, hoverDir: null, hoverTimer: null };
+        this.osDropCounter = 0;
 
         this.root = { path: '', type: 'dir', name: '', children: null, expanded: true };
         this.nodesByPath.set('', this.root);
@@ -32,6 +34,8 @@ export class FileTree {
         this.rootEl = document.createElement('ul');
         this.rootEl.className = 'tree tree-root';
         this.container.appendChild(this.rootEl);
+
+        this.attachOsDropZone();
     }
 
     async init() {
@@ -468,19 +472,30 @@ export class FileTree {
 
         this.dragState.targetNode = valid ? targetNode : null;
 
-        // Beim Verweilen über einem eingeklappten Verzeichnis dieses aufklappen
+        this.scheduleHoverExpand(this.dragState, targetNode);
+    }
+
+    /**
+     * Klappt ein eingeklapptes Verzeichnis auf, wenn während eines Drags
+     * (intern verschoben oder Datei/Ordner von außerhalb gezogen) kurz darauf
+     * verweilt wird. `state` ist entweder this.dragState oder this.osDropState.
+     */
+    scheduleHoverExpand(state, targetNode) {
         const hoverDir = targetNode && targetNode !== this.root && targetNode.type === 'dir' ? targetNode : null;
-        if (hoverDir !== this.dragState.hoverDir) {
-            clearTimeout(this.dragState.hoverTimer);
-            this.dragState.hoverDir = hoverDir;
-            this.dragState.hoverTimer = hoverDir && !hoverDir.expanded
-                ? setTimeout(() => {
-                    if (this.dragState && this.dragState.hoverDir === hoverDir && !hoverDir.expanded) {
-                        this.toggle(hoverDir);
-                    }
-                }, HOVER_EXPAND_MS)
-                : null;
+
+        if (hoverDir === state.hoverDir) {
+            return;
         }
+
+        clearTimeout(state.hoverTimer);
+        state.hoverDir = hoverDir;
+        state.hoverTimer = hoverDir && !hoverDir.expanded
+            ? setTimeout(() => {
+                if (state.hoverDir === hoverDir && !hoverDir.expanded) {
+                    this.toggle(hoverDir);
+                }
+            }, HOVER_EXPAND_MS)
+            : null;
     }
 
     endDrag() {
@@ -531,5 +546,173 @@ export class FileTree {
     reportError(error) {
         const message = error instanceof ApiError ? error.message : 'Unerwarteter Fehler';
         window.alert(message);
+    }
+
+    // --- Datei-/Ordner-Upload per Drag & Drop vom Betriebssystem ---
+
+    attachOsDropZone() {
+        this.container.addEventListener('dragenter', (event) => {
+            if (!event.dataTransfer?.types.includes('Files')) {
+                return;
+            }
+            event.preventDefault();
+            this.osDropCounter += 1;
+            this.container.classList.add('tree-container--drag-active');
+        });
+
+        this.container.addEventListener('dragover', (event) => {
+            if (!event.dataTransfer?.types.includes('Files')) {
+                return;
+            }
+            event.preventDefault();
+
+            const targetNode = this.resolveDropTarget(event.clientX, event.clientY) ?? this.root;
+            const newHighlightEl = targetNode === this.root
+                ? this.container
+                : targetNode.el.querySelector(':scope > .tree-row');
+
+            if (this.osDropState.highlightEl !== newHighlightEl) {
+                this.osDropState.highlightEl?.classList.remove('drop-target');
+                newHighlightEl?.classList.add('drop-target');
+                this.osDropState.highlightEl = newHighlightEl;
+            }
+
+            this.scheduleHoverExpand(this.osDropState, targetNode);
+        });
+
+        this.container.addEventListener('dragleave', () => {
+            this.osDropCounter = Math.max(0, this.osDropCounter - 1);
+            if (this.osDropCounter === 0) {
+                this.clearOsDropState();
+            }
+        });
+
+        this.container.addEventListener('drop', (event) => {
+            if (!event.dataTransfer?.types.includes('Files')) {
+                return;
+            }
+            event.preventDefault();
+
+            const targetNode = this.resolveDropTarget(event.clientX, event.clientY) ?? this.root;
+            const items = [...event.dataTransfer.items];
+            this.osDropCounter = 0;
+            this.clearOsDropState();
+
+            this.uploadDroppedItems(items, targetNode);
+        });
+    }
+
+    clearOsDropState() {
+        this.container.classList.remove('tree-container--drag-active');
+        clearTimeout(this.osDropState.hoverTimer);
+        this.osDropState.highlightEl?.classList.remove('drop-target');
+        this.osDropState.highlightEl = null;
+        this.osDropState.hoverDir = null;
+        this.osDropState.hoverTimer = null;
+    }
+
+    /**
+     * @param {DataTransferItem[]} items
+     * @returns {Promise<{files: {relativePath: string, file: File}[], dirs: string[]}>}
+     */
+    async collectDroppedEntries(items) {
+        const files = [];
+        const dirs = [];
+
+        const walk = (entry, prefix) => new Promise((resolve, reject) => {
+            if (entry.isFile) {
+                entry.file((file) => {
+                    files.push({ relativePath: `${prefix}${entry.name}`, file });
+                    resolve();
+                }, reject);
+            } else if (entry.isDirectory) {
+                dirs.push(`${prefix}${entry.name}`);
+                const reader = entry.createReader();
+                const readBatch = () => {
+                    reader.readEntries(async (batch) => {
+                        if (batch.length === 0) {
+                            resolve();
+                            return;
+                        }
+                        await Promise.all(batch.map((child) => walk(child, `${prefix}${entry.name}/`)));
+                        readBatch();
+                    }, reject);
+                };
+                readBatch();
+            } else {
+                resolve();
+            }
+        });
+
+        const tasks = [];
+        for (const item of items) {
+            const entry = item.webkitGetAsEntry?.();
+            if (entry) {
+                tasks.push(walk(entry, ''));
+            } else {
+                const file = item.getAsFile?.();
+                if (file) {
+                    files.push({ relativePath: file.name, file });
+                }
+            }
+        }
+        await Promise.all(tasks);
+
+        return { files, dirs };
+    }
+
+    async uploadDroppedItems(items, targetDirNode) {
+        const { files, dirs } = await this.collectDroppedEntries(items);
+        await this.uploadFilesToDir(files, dirs, targetDirNode);
+    }
+
+    /**
+     * Lädt über den Upload-Button ausgewählte Dateien (flach, ohne
+     * Ordnerstruktur - das native Datei-Dialogfeld kennt keine Unterordner)
+     * in das aktuell ausgewählte Verzeichnis hoch.
+     * @param {FileList} fileList
+     */
+    async uploadFiles(fileList) {
+        const targetDirNode = this.nodesByPath.get(this.selectedDir) ?? this.root;
+        const files = [...fileList].map((file) => ({ relativePath: file.name, file }));
+        await this.uploadFilesToDir(files, [], targetDirNode);
+    }
+
+    async uploadFilesToDir(files, dirs, targetDirNode) {
+        if (files.length === 0 && dirs.length === 0) {
+            return;
+        }
+
+        const dirsNeeded = new Set(dirs);
+        for (const { relativePath } of files) {
+            let dir = dirOf(relativePath);
+            while (dir !== '') {
+                dirsNeeded.add(dir);
+                dir = dirOf(dir);
+            }
+        }
+
+        const sortedDirs = [...dirsNeeded].sort((a, b) => a.split('/').length - b.split('/').length);
+
+        for (const dir of sortedDirs) {
+            try {
+                await api.createFile(joinPath(targetDirNode.path, dir), 'dir');
+            } catch (error) {
+                if (!(error instanceof ApiError && error.status === 409)) {
+                    this.reportError(error);
+                    return;
+                }
+            }
+        }
+
+        for (const { relativePath, file } of files) {
+            try {
+                await api.uploadFile(joinPath(targetDirNode.path, relativePath), file);
+            } catch (error) {
+                this.reportError(error);
+            }
+        }
+
+        await this.reloadDir(targetDirNode);
     }
 }

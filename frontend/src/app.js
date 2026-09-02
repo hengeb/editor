@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveBtn = el('save-button');
     const newFileBtn = el('new-file-btn');
     const newFolderBtn = el('new-folder-btn');
+    const uploadBtn = el('upload-btn');
+    const uploadInput = el('upload-input');
     const sidebar = el('sidebar');
     const sidebarOverlay = el('sidebar-overlay');
     const treeContainer = el('tree-container');
@@ -22,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBtn.innerHTML = ui.save;
     newFileBtn.innerHTML = ui.filePlus;
     newFolderBtn.innerHTML = ui.folderPlus;
+    uploadBtn.innerHTML = ui.upload;
 
     const tabs = new TabManager(tabsBar, editorContainer, {
         onActiveChange: (tab) => {
@@ -60,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     newFileBtn.addEventListener('click', () => tree.createEntry('file'));
     newFolderBtn.addEventListener('click', () => tree.createEntry('dir'));
+
+    uploadBtn.addEventListener('click', () => uploadInput.click());
+    uploadInput.addEventListener('change', () => {
+        if (uploadInput.files.length > 0) {
+            tree.uploadFiles(uploadInput.files);
+        }
+        uploadInput.value = '';
+    });
 
     document.addEventListener('keydown', (event) => {
         const ctrlOrCmd = event.ctrlKey || event.metaKey;

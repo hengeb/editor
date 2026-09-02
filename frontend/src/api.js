@@ -13,8 +13,12 @@ async function request(method, url, body) {
     }
 
     if (body !== undefined) {
-        options.headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(body);
+        if (body instanceof Blob) {
+            options.body = body;
+        } else {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
     }
 
     const response = await fetch(url, options);
@@ -54,5 +58,13 @@ export const api = {
     deleteFile(path) {
         const params = new URLSearchParams({ path });
         return request('DELETE', `/api/file?${params}`);
+    },
+    rawUrl(path) {
+        const params = new URLSearchParams({ path });
+        return `/api/raw?${params}`;
+    },
+    uploadFile(path, file) {
+        const params = new URLSearchParams({ path });
+        return request('PUT', `/api/upload?${params}`, file);
     },
 };

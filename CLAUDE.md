@@ -12,8 +12,10 @@ lazy-geladenem Dateibaum und Tab-Editor (CodeMirror 6).
 Vollständig implementiert und lokal end-to-end verifiziert (PHPUnit, curl
 gegen die REST-API, Playwright-Smoke-Test im echten Browser gegen den
 laufenden Container: Datei anlegen/öffnen/bearbeiten/speichern, Dirty-
-Indikator, Kontextmenü-Rename/Delete, Mobile-Sidebar-Toggle). Drag & Drop
-zum Verschieben ist implementiert, aber nicht automatisiert getestet (siehe
+Indikator, Kontextmenü-Rename/Delete, Mobile-Sidebar-Toggle, Bild-/PDF-
+Vorschau, Datei-Upload per Drop inkl. Überschreiben/Mehrfach-Upload/Auto-
+Expand). Drag & Drop zum Verschieben sowie das rekursive Traversieren
+gedroppter Ordner sind implementiert, aber nicht automatisiert testbar (siehe
 "Offene Punkte" unten).
 
 ## Architektur
@@ -84,6 +86,12 @@ tests/Unit/                                         – PHPUnit (PathResolver, F
 - `PUT /api/file` `{path, content, mtime}` – speichern (404/409)
 - `PATCH /api/file` `{path, newPath}` – umbenennen/verschieben (409)
 - `DELETE /api/file?path=` – löschen (rekursiv bei Verzeichnissen)
+- `GET /api/raw?path=` – liefert den Rohinhalt einer Datei mit per `fileinfo`
+  erkanntem `Content-Type` (kein JSON); Basis für Bild-/PDF-Vorschau und
+  Download-Links im Client
+- `PUT /api/upload?path=` – Request-Body = rohe Bytes (kein JSON); legt die
+  Datei an oder überschreibt sie, falls sie existiert (Upsert, im Gegensatz zu
+  `POST /api/file`). Übergeordnetes Verzeichnis muss existieren.
 
 Fehler einheitlich als `{"error": "..."}` mit passendem HTTP-Status.
 
@@ -104,7 +112,19 @@ Fehler einheitlich als `{"error": "..."}` mit passendem HTTP-Status.
   über die Pointer-Events-API implementiert (kein natives HTML5-DnD, da das
   auf Touch nicht funktioniert).
 - Tabs (`tabs.js`): ein Tab pro offener Datei, Dirty-Punkt, Schließen mit
-  Rückfrage bei ungespeicherten Änderungen, horizontal scrollbare Tab-Leiste.
+  Rückfrage bei ungespeicherten Änderungen (auch per Strg+Alt+W – Strg+W selbst
+  ist ein von Browsern reservierter, nicht abfangbarer Shortcut), horizontal
+  scrollbare Tab-Leiste. Binärdateien: Bilder als `<img>`, PDFs als `<embed>`,
+  alles andere als Download-Button – jeweils über `/api/raw`.
+- Datei-Upload per Drag & Drop von Dateien/Ordnern des Betriebssystems in den
+  Dateibaum (`tree.js`, natives HTML5-DnD via `dragenter`/`dragover`/`drop`,
+  parallel zum internen Pointer-Events-Verschieben). Ordner werden über
+  `webkitGetAsEntry()`/`createReader()` rekursiv traversiert; benötigte
+  Unterverzeichnisse werden vorab (flach zuerst) angelegt, vorhandene Dateien
+  gleichen Namens überschrieben. Gleiche Auto-Expand-beim-Verweilen-Logik wie
+  beim internen Verschieben (gemeinsam genutzt über `scheduleHoverExpand`).
+  Zusätzlich ein Upload-Button in der Baum-Toolbar (nativer Datei-Dialog,
+  flach ohne Unterordner) für den Fall ohne Drag & Drop.
 - Layout mobile-first (`public/assets/css/style.css`, natives CSS-Nesting):
   Desktop (≥48rem) zweispaltig, Mobile nur Editor mit Dateibaum als
   Overlay/Drawer.
@@ -153,3 +173,12 @@ ausgeführt (`cd deploy && make up`).
 - Drag & Drop (Maus + Touch-Long-Press) ist implementiert, aber nur manuell
   überflogen, nicht automatisiert getestet (Playwright kann Touch-Pointer-
   Events simulieren, wurde hier aus Zeitgründen nicht ergänzt).
+- Das rekursive Hochladen ganzer Ordner (per Drop von außerhalb des Browsers)
+  lässt sich nicht automatisiert testen: `DataTransferItem.webkitGetAsEntry()`
+  liefert nur bei echten, vom Betriebssystem stammenden Drags echte
+  Verzeichnis-Einträge; synthetische `DataTransfer`-Objekte (wie sie
+  Playwright/JS erzeugen) geben dafür `null` zurück. Einzel-/Mehrfachdatei-
+  Uploads sind dagegen per synthetischem `drop`-Event verifiziert (über den
+  `getAsFile()`-Fallback im Code). Die Traversierungslogik selbst wurde
+  manuell durchgerechnet, aber nicht per echtem Ordner-Drop im Browser
+  getestet.

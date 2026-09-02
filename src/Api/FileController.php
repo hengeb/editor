@@ -23,6 +23,18 @@ final class FileController
     }
 
     /**
+     * @param array<string, mixed> $query
+     */
+    public function getRaw(array $query): ApiResponse
+    {
+        $path = $this->requireStringQuery($query, 'path');
+
+        [$content, $mimeType] = $this->files->readRaw($path);
+
+        return ApiResponse::raw($content, $mimeType);
+    }
+
+    /**
      * @param array<string, mixed> $body
      */
     public function post(array $body): ApiResponse

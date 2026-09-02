@@ -57,6 +57,50 @@ final class FileRepository
         return $result;
     }
 
+    /**
+     * @return array{0: string, 1: string} [Inhalt, MIME-Type]
+     */
+    public function readRaw(string $relativePath): array
+    {
+        $absolute = $this->paths->resolveExisting($relativePath);
+
+        if (is_dir($absolute)) {
+            throw new PathException('Ist ein Verzeichnis', 400);
+        }
+
+        $content = file_get_contents($absolute);
+        if ($content === false) {
+            throw new PathException('Datei konnte nicht gelesen werden', 500);
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = ($finfo !== false ? finfo_file($finfo, $absolute) : false) ?: 'application/octet-stream';
+
+        return [$content, $mimeType];
+    }
+
+    /**
+     * Legt eine Datei an oder überschreibt sie, falls sie bereits existiert
+     * (im Gegensatz zu create()). Für Datei-Uploads per Drag & Drop.
+     */
+    public function upload(string $relativePath, string $content): int
+    {
+        $absolute = $this->paths->resolveNew($relativePath);
+
+        if (is_dir($absolute)) {
+            throw new PathException('Ist ein Verzeichnis', 400);
+        }
+
+        if (file_put_contents($absolute, $content) === false) {
+            throw new PathException('Datei konnte nicht hochgeladen werden', 500);
+        }
+
+        clearstatcache(true, $absolute);
+        $mtime = filemtime($absolute);
+
+        return $mtime !== false ? $mtime : time();
+    }
+
     public function create(string $relativePath, string $type): void
     {
         if ($type !== 'file' && $type !== 'dir') {
