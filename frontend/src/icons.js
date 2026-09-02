@@ -11,6 +11,7 @@ import iconDeviceFloppy from '@tabler/icons/outline/device-floppy.svg';
 import iconX from '@tabler/icons/outline/x.svg';
 import iconMenu from '@tabler/icons/outline/menu.svg';
 import iconUpload from '@tabler/icons/outline/upload.svg';
+import iconDownload from '@tabler/icons/outline/download.svg';
 import iconFileCode from '@tabler/icons/outline/file-code.svg';
 import iconFileTypeCss from '@tabler/icons/outline/file-type-css.svg';
 import iconFileTypeHtml from '@tabler/icons/outline/file-type-html.svg';
@@ -53,6 +54,7 @@ export const ui = {
     close: iconX,
     menu: iconMenu,
     upload: iconUpload,
+    download: iconDownload,
     warning: iconAlertTriangle,
 };
 

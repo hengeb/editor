@@ -294,7 +294,17 @@ export class FileTree {
     }
 
     openContextMenu(node, x, y) {
-        showContextMenu(x, y, [
+        const items = [];
+
+        if (node.type === 'file') {
+            items.push({
+                label: 'Download',
+                icon: ui.download,
+                onSelect: () => this.downloadNode(node),
+            });
+        }
+
+        items.push(
             {
                 label: 'Umbenennen',
                 icon: ui.pencil,
@@ -305,7 +315,18 @@ export class FileTree {
                 icon: ui.trash,
                 onSelect: () => this.deleteNode(node),
             },
-        ]);
+        );
+
+        showContextMenu(x, y, items);
+    }
+
+    downloadNode(node) {
+        const link = document.createElement('a');
+        link.href = api.rawUrl(node.path);
+        link.download = node.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     }
 
     startRename(node, nameEl) {
