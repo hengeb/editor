@@ -22,6 +22,13 @@ function respond(int $status, mixed $data): void
     echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
+// Alle API-Antworten sind dynamisch (Dateiinhalte ändern sich, Security-Header
+// wie X-Frame-Options sollen nicht aus einem alten Cache-Eintrag nachwirken -
+// das führte z.B. dazu, dass Firefox einen /api/raw-Request für eine
+// PDF-Vorschau gar nicht erst losschickte, weil er den früheren
+// X-Frame-Options: DENY einer gecachten Antwort weiterverwendete).
+header('Cache-Control: no-store');
+
 /** @var array<string, string> $headers */
 $headers = [];
 foreach ($_SERVER as $key => $value) {
